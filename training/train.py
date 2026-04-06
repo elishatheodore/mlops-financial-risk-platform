@@ -307,42 +307,28 @@ class CreditCardFraudTrainer:
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='Train credit card fraud detection model')
-    
-    parser.add_argument(
-        '--experiment-name',
-        type=str,
-        required=True,
-        help='Name of the MLflow experiment'
-    )
-    
-    parser.add_argument(
-        '--model-type',
-        type=str,
-        choices=['random_forest', 'xgboost'],
-        default='random_forest',
-        help='Type of model to train (random_forest or xgboost)'
-    )
-    
-    parser.add_argument(
-        '--n-estimators',
-        type=int,
-        default=100,
-        help='Number of estimators for the model'
-    )
-    
-    parser.add_argument(
-        '--max-depth',
-        type=int,
-        default=None,
-        help='Maximum depth of the model (None for unlimited)'
-    )
-    
+    parser.add_argument('--experiment-name', type=str, required=True,
+                       help='MLflow experiment name')
+    parser.add_argument('--model-type', type=str, default='random_forest',
+                       choices=['random_forest', 'xgboost'],
+                       help='Model type to train')
+    parser.add_argument('--n-estimators', type=int, default=100,
+                       help='Number of estimators for random forest')
+    parser.add_argument('--max-depth', type=int, default=None,
+                       help='Maximum depth for random forest')
+    parser.add_argument('--mlflow-tracking-uri', type=str, default='http://localhost:5000',
+                       help='MLflow tracking server URI')
+    parser.add_argument('--model-name', type=str, default='financial-risk-model',
+                       help='Model name for MLflow registry')
     return parser.parse_args()
 
 def main():
     """Main training function."""
     # Parse arguments
     args = parse_arguments()
+    
+    # Set MLflow tracking URI
+    mlflow.set_tracking_uri(args.mlflow_tracking_uri)
     
     logger.info("🚀 Starting Credit Card Fraud Detection Training")
     logger.info(f"📝 Experiment: {args.experiment_name}")

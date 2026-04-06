@@ -29,27 +29,37 @@ class RiskLabel(str, Enum):
 class PredictionRequest(BaseModel):
     """Request schema for fraud prediction."""
     
-    # Core transaction features
-    amount: float = Field(..., gt=0, description="Transaction amount in USD")
-    merchant_category: MerchantCategory = Field(..., description="Merchant category")
-    hour_of_day: int = Field(..., ge=0, le=23, description="Hour of day (0-23)")
-    day_of_week: int = Field(..., ge=0, le=6, description="Day of week (0=Sunday, 6=Saturday)")
-    
-    # Behavioral features
-    transaction_count_24h: int = Field(..., ge=0, description="Number of transactions in last 24 hours")
-    avg_amount_30d: float = Field(..., ge=0, description="Average transaction amount in last 30 days")
-    
-    # Additional fraud detection features
-    distance_from_home: float = Field(..., ge=0, description="Distance from home location in miles")
-    distance_from_last_transaction: float = Field(..., ge=0, description="Distance from last transaction in miles")
-    ratio_to_median_purchase_price: float = Field(..., gt=0, description="Ratio to median purchase price")
-    repeat_retailer: bool = Field(..., description="Whether transaction is at repeat retailer")
-    used_chip: bool = Field(..., description="Whether chip was used for transaction")
-    used_pin_number: bool = Field(..., description="Whether PIN number was used")
-    
-    # Online transaction features
-    online_order: bool = Field(..., description="Whether this is an online order")
-    foreign_transaction: bool = Field(..., description="Whether this is a foreign transaction")
+    # Original credit card features
+    Time: float = Field(..., ge=0, description="Time in seconds from first transaction")
+    V1: float = Field(..., description="PCA component V1")
+    V2: float = Field(..., description="PCA component V2")
+    V3: float = Field(..., description="PCA component V3")
+    V4: float = Field(..., description="PCA component V4")
+    V5: float = Field(..., description="PCA component V5")
+    V6: float = Field(..., description="PCA component V6")
+    V7: float = Field(..., description="PCA component V7")
+    V8: float = Field(..., description="PCA component V8")
+    V9: float = Field(..., description="PCA component V9")
+    V10: float = Field(..., description="PCA component V10")
+    V11: float = Field(..., description="PCA component V11")
+    V12: float = Field(..., description="PCA component V12")
+    V13: float = Field(..., description="PCA component V13")
+    V14: float = Field(..., description="PCA component V14")
+    V15: float = Field(..., description="PCA component V15")
+    V16: float = Field(..., description="PCA component V16")
+    V17: float = Field(..., description="PCA component V17")
+    V18: float = Field(..., description="PCA component V18")
+    V19: float = Field(..., description="PCA component V19")
+    V20: float = Field(..., description="PCA component V20")
+    V21: float = Field(..., description="PCA component V21")
+    V22: float = Field(..., description="PCA component V22")
+    V23: float = Field(..., description="PCA component V23")
+    V24: float = Field(..., description="PCA component V24")
+    V25: float = Field(..., description="PCA component V25")
+    V26: float = Field(..., description="PCA component V26")
+    V27: float = Field(..., description="PCA component V27")
+    V28: float = Field(..., description="PCA component V28")
+    Amount: float = Field(..., gt=0, description="Transaction amount in USD")
     
     @validator('amount')
     def validate_amount(cls, v):

@@ -348,50 +348,6 @@ def record_prediction_batch(risk_scores: list, risk_labels: list, model_version:
 logger.info("📊 Prometheus metrics initialized")
 logger.info("   • Metrics endpoint: /metrics")
 logger.info("   • Tracking: predictions, latency, errors, drift, accuracy")
-                model_version="latest",
-                risk_level=prediction_result.get('risk_level', 'Unknown')
-            ).inc()
-            
-            if prediction_result.get('risk_score'):
-                self.metrics.risk_score_distribution.observe(prediction_result['risk_score'])
-            
-            if prediction_result.get('probability_default'):
-                self.metrics.default_probability_distribution.observe(prediction_result['probability_default'])
-                
-        except Exception as e:
-            logger.error(f"Error recording prediction metrics: {e}")
-    
-    def get_risk_level_distribution(self) -> Dict[str, int]:
-        """Get distribution of risk levels."""
-        if not self.prediction_history:
-            return {}
-        
-        distribution = {}
-        for entry in self.prediction_history:
-            risk_level = entry.get('risk_level', 'Unknown')
-            distribution[risk_level] = distribution.get(risk_level, 0) + 1
-        
-        return distribution
-    
-    def get_average_risk_score(self) -> float:
-        """Get average risk score."""
-        if not self.prediction_history:
-            return 0.0
-        
-        risk_scores = [entry.get('risk_score', 0) for entry in self.prediction_history if entry.get('risk_score')]
-        return sum(risk_scores) / len(risk_scores) if risk_scores else 0.0
-    
-    def get_high_risk_percentage(self, threshold: float = 70.0) -> float:
-        """Get percentage of high-risk predictions."""
-        if not self.prediction_history:
-            return 0.0
-        
-        high_risk_count = sum(
-            1 for entry in self.prediction_history 
-            if entry.get('risk_score', 0) > threshold
-        )
-        
-        return (high_risk_count / len(self.prediction_history)) * 100
 
 def update_system_metrics(metrics: MetricsCollector):
     """Update system metrics."""
