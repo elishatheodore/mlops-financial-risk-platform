@@ -1,0 +1,419 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'serving/**'
+    name: Build and Deploy
+
+on:
+  workflow_run:
+    workflows: ["Train and Evaluate Model"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      image_tag:
+        description: 'Docker image tag'
+        required: false
+        default: 'latest'
+        type: string
+      helm_values:
+        description: 'Helm values file to use'
+        required: false
+        default: 'values-prod.yaml'
+        type: string
+
+env:
+  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image_digest: ${{ steps.build.outputs.digest }}
+      image_tag: ${{ steps.meta.outputs.tags }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/elishatheodore/mlops-financial-risk-platform/risk-server
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=${{ github.event.inputs.image_tag || 'latest' }}
+        flavor: |
+          latest=true
+          
+    - name: Build and push multi-arch Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: ./serving
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: |
+          org.opencontainers.image.title=Financial Risk Prediction API
+          org.opencontainers.image.description=Credit card fraud detection model serving API
+          org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          org.opencontainers.image.revision=${{ github.sha }}
+          org.opencontainers.image.created=${{ steps.meta.outputs.created }}
+          org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Generate SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        image: ${{ steps.meta.outputs.tags }}
+        format: spdx-json
+        output-file: sbom.spdx.json
+        
+    - name: Upload SBOM
+      uses: actions/upload-artifact@v3
+      with:
+        name: sbom
+        path: sbom.spdx.json
+        retention-days: 90
+        
+    - name: Generate build summary
+      run: |
+        echo "## 🐳 Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Image | ${{ steps.meta.outputs.tags }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Digest | ${{ steps.build.outputs.digest }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Platforms | linux/amd64, linux/arm64 |" >> $GITHUB_STEP_SUMMARY
+        echo "| Registry | ghcr.io/elishatheodore/mlops-financial-risk-platform/risk-server |" >> $GITHUB_STEP_SUMMARY
+        echo "| Status | ✅ Built and Pushed |" >> $GITHUB_STEP_SUMMARY
+
+  scan:
+    needs: build
+    runs-on: ubuntu-latest
+    if: always() && needs.build.result == 'success'
+    
+    steps:
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ needs.build.outputs.image_tag }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+        
+    - name: Parse Trivy results
+      id: parse
+      run: |
+        if [ -f "trivy-results.sarif" ]; then
+          # Count vulnerabilities by severity
+          CRITICAL=$(jq '[.runs[] | .results[] | select(.level == "ERROR")] | length' trivy-results.sarif)
+          HIGH=$(jq '[.runs[] | .results[] | select(.level == "WARNING")] | length' trivy-results.sarif)
+          MEDIUM=$(jq '[.runs[] | .results[] | select(.level == "NOTE")] | length' trivy-results.sarif)
+          LOW=$(jq '[.runs[] | .results[] | select(.level == "INFO")] | length' trivy-results.sarif)
+          
+          echo "critical_count=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high_count=$HIGH" >> $GITHUB_OUTPUT
+          echo "medium_count=$MEDIUM" >> $GITHUB_OUTPUT
+          echo "low_count=$LOW" >> $GITHUB_OUTPUT
+          
+          echo "## 🔍 Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Critical | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| High | $HIGH |" >> $GITHUB_STEP_SUMMARY
+          echo "| Medium | $MEDIUM |" >> $GITHUB_STEP_SUMMARY
+          echo "| Low | $LOW |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "critical_count=0" >> $GITHUB_OUTPUT
+          echo "high_count=0" >> $GITHUB_OUTPUT
+          echo "medium_count=0" >> $GITHUB_OUTPUT
+          echo "low_count=0" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Check for critical vulnerabilities
+      run: |
+        if [ "${{ steps.parse.outputs.critical_count }}" -gt 0 ]; then
+          echo "❌ CRITICAL vulnerabilities found: ${{ steps.parse.outputs.critical_count }}"
+          echo "🚨 Deployment blocked due to security issues"
+          echo "Please fix critical vulnerabilities before deploying"
+          exit 1
+        elif [ "${{ steps.parse.outputs.high_count }}" -gt 5 ]; then
+          echo "⚠️ HIGH vulnerabilities found: ${{ steps.parse.outputs.high_count }}"
+          echo "Consider fixing high severity vulnerabilities before production deployment"
+        else
+          echo "✅ Security scan passed - no critical vulnerabilities"
+        fi
+
+  deploy:
+    needs: [build, scan]
+    runs-on: ubuntu-latest
+    if: success() && needs.build.result == 'success' && needs.scan.result == 'success'
+    environment: ${{ github.event.inputs.environment || 'production' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+        
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+        kubectl cluster-info
+        
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: 'v3.13.0'
+        
+    - name: Add Helm repositories
+      run: |
+        helm repo add bitnami https://charts.bitnami.com/bitnami
+        helm repo update
+        
+    - name: Determine values file
+      id: values
+      run: |
+        VALUES_FILE="${{ github.event.inputs.helm_values || 'values-prod.yaml' }}"
+        echo "values_file=$VALUES_FILE" >> $GITHUB_OUTPUT
+        
+    - name: Deploy with Helm
+      run: |
+        VALUES_FILE="${{ steps.values.outputs.values_file }}"
+        NAMESPACE="risk-platform-${{ github.event.inputs.environment || 'production' }}"
+        
+        echo "🚀 Deploying to namespace: $NAMESPACE"
+        echo "📋 Using values file: $VALUES_FILE"
+        
+        # Create namespace if it doesn't exist
+        kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Deploy with Helm
+        helm upgrade --install risk-platform ./helm/risk-platform \
+          --namespace $NAMESPACE \
+          --values ./helm/risk-platform/$VALUES_FILE \
+          --set image.repository=ghcr.io/elishatheodore/mlops-financial-risk-platform/risk-server \
+          --set image.tag=${{ github.event.inputs.image_tag || 'latest' }} \
+          --set image.pullPolicy=IfNotPresent \
+          --wait \
+          --timeout=10m \
+          --atomic
+          
+    - name: Verify deployment
+      run: |
+        NAMESPACE="risk-platform-${{ github.event.inputs.environment || 'production' }}"
+        
+        echo "⏳ Waiting for deployment to be ready..."
+        kubectl rollout status deployment/risk-platform -n $NAMESPACE --timeout=300s
+        
+        # Check pod status
+        kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=risk-platform
+        
+        # Check service status
+        kubectl get svc -n $NAMESPACE -l app.kubernetes.io/name=risk-platform
+        
+    - name: Run smoke tests
+      run: |
+        NAMESPACE="risk-platform-${{ github.event.inputs.environment || 'production' }}"
+        
+        echo "🧪 Running smoke tests..."
+        
+        # Wait for service to be ready
+        kubectl wait --for=condition=ready svc/risk-platform -n $NAMESPACE --timeout=60s
+        
+        # Get service URL
+        SERVICE_URL=$(kubectl get svc risk-platform -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        if [ -z "$SERVICE_URL" ]; then
+          # For ClusterIP or NodePort
+          SERVICE_URL="localhost"
+          kubectl port-forward svc/risk-platform 8000:8000 -n $NAMESPACE &
+          PORT_FORWARD_PID=$!
+          sleep 10
+        fi
+        
+        # Test health endpoint
+        echo "🏥 Testing health endpoint..."
+        HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://$SERVICE_URL:8000/health || echo "000")
+        
+        if [ "$HEALTH_RESPONSE" = "200" ]; then
+          echo "✅ Health check passed - HTTP 200"
+        else
+          echo "❌ Health check failed - HTTP $HEALTH_RESPONSE"
+          echo "🚨 Deployment may have issues"
+          exit 1
+        fi
+        
+        # Test model info endpoint
+        echo "📊 Testing model info endpoint..."
+        MODEL_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://$SERVICE_URL:8000/model/info || echo "000")
+        
+        if [ "$MODEL_RESPONSE" = "200" ]; then
+          echo "✅ Model info check passed"
+        else
+          echo "⚠️ Model info check failed - HTTP $MODEL_RESPONSE"
+        fi
+        
+        # Test metrics endpoint
+        echo "📈 Testing metrics endpoint..."
+        METRICS_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://$SERVICE_URL:8000/metrics || echo "000")
+        
+        if [ "$METRICS_RESPONSE" = "200" ]; then
+          echo "✅ Metrics check passed"
+        else
+          echo "⚠️ Metrics check failed - HTTP $METRICS_RESPONSE"
+        fi
+        
+        # Clean up port forward if used
+        if [ ! -z "$PORT_FORWARD_PID" ]; then
+          kill $PORT_FORWARD_PID 2>/dev/null || true
+        fi
+        
+    - name: Generate deployment summary
+      run: |
+        NAMESPACE="risk-platform-${{ github.event.inputs.environment || 'production' }}"
+        
+        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Environment | ${{ github.event.inputs.environment || 'production' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Namespace | $NAMESPACE |" >> $GITHUB_STEP_SUMMARY
+        echo "| Image | ${{ needs.build.outputs.image_tag }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Values File | ${{ steps.values.outputs.values_file }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Status | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
+        
+        # Get deployment info
+        REPLICAS=$(kubectl get deployment risk-platform -n $NAMESPACE -o jsonpath='{.status.readyReplicas}')
+        echo "| Ready Replicas | $REPLICAS |" >> $GITHUB_STEP_SUMMARY
+
+  rollback:
+    needs: [build, scan, deploy]
+    runs-on: ubuntu-latest
+    if: failure() && (needs.deploy.result == 'failure' || needs.scan.result == 'failure')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+        
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+        kubectl cluster-info
+        
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: 'v3.13.0'
+        
+    - name: Automatic rollback
+      run: |
+        NAMESPACE="risk-platform-${{ github.event.inputs.environment || 'production' }}"
+        
+        echo "🔄 Starting automatic rollback..."
+        echo "📋 Namespace: $NAMESPACE"
+        
+        # Get deployment history
+        helm history risk-platform -n $NAMESPACE --max=10
+        
+        # Rollback to previous revision
+        PREVIOUS_REVISION=$(helm history risk-platform -n $NAMESPACE --max=2 --output json | jq -r '.[1].revision')
+        
+        if [ -n "$PREVIOUS_REVISION" ]; then
+          echo "🔄 Rolling back to revision: $PREVIOUS_REVISION"
+          helm rollback risk-platform $PREVIOUS_REVISION -n $NAMESPACE
+          
+          # Wait for rollback to complete
+          kubectl rollout status deployment/risk-platform -n $NAMESPACE --timeout=300s
+          
+          echo "✅ Rollback completed successfully"
+          
+          echo "## 🔄 Rollback Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | ${{ github.event.inputs.environment || 'production' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Namespace | $NAMESPACE |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rollback Revision | $PREVIOUS_REVISION |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ✅ Completed |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ No previous revision found for rollback"
+          echo "🔧 Manual intervention may be required"
+        fi
+        
+    - name: Verify rollback
+      run: |
+        NAMESPACE="risk-platform-${{ github.event.inputs.environment || 'production' }}"
+        
+        echo "🧪 Verifying rollback..."
+        
+        # Check deployment status after rollback
+        kubectl rollout status deployment/risk-platform -n $NAMESPACE --timeout=120s
+        
+        # Test health endpoint
+        kubectl port-forward svc/risk-platform 8000:8000 -n $NAMESPACE &
+        PORT_FORWARD_PID=$!
+        sleep 15
+        
+        HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health || echo "000")
+        
+        if [ "$HEALTH_RESPONSE" = "200" ]; then
+          echo "✅ Rollback verification passed - service is healthy"
+        else
+          echo "❌ Rollback verification failed - service unhealthy"
+          echo "🚨 Manual intervention required"
+          exit 1
+        fi
+        
+        # Clean up
+        kill $PORT_FORWARD_PID 2>/dev/null || true
+        
+    - name: Notify rollback
+      if: always()
+      run: |
+        echo "📧 Rollback notification sent"
+        echo "Environment: ${{ github.event.inputs.environment || 'production' }}"
+        echo "Status: Rollback completed due to deployment failure"d!"
+        exit 1

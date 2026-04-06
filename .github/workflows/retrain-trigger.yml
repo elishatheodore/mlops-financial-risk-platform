@@ -1,0 +1,313 @@
+name: Model Retraining Trigger
+
+on:
+  schedule:
+    # Run every Monday at 2 AM UTC
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      force_retrain:
+        description: 'Force retraining regardless of drift score'
+        required: false
+        default: 'false'
+        type: boolean
+      drift_threshold:
+        description: 'Drift threshold for triggering retraining'
+        required: false
+        default: '0.15'
+        type: string
+
+env:
+  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-latest
+    outputs:
+      drift_score: ${{ steps.analyze.outputs.drift_score }}
+      drift_detected: ${{ steps.analyze.outputs.drift_detected }}
+      retrain_triggered: ${{ steps.trigger.outputs.triggered }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('monitoring/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install monitoring dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r monitoring/requirements.txt
+        
+    - name: Create monitoring directories
+      run: |
+        mkdir -p monitoring/data monitoring/reports monitoring/logs
+        
+    - name: Check for drift detector
+      run: |
+        if [ ! -f "monitoring/drift_detector.py" ]; then
+          echo "❌ Drift detector not found: monitoring/drift_detector.py"
+          echo "📋 Please ensure the drift detection script exists"
+          exit 1
+        else
+          echo "✅ Drift detector found"
+        fi
+        
+    - name: Run drift detection
+      id: analyze
+      run: |
+        echo "🔍 Starting drift detection analysis..."
+        
+        # Run drift detection script
+        cd monitoring
+        python drift_detector.py \
+          --mlflow-tracking-uri "${{ secrets.MLFLOW_TRACKING_URI }}" \
+          --model-name "financial-risk-model" \
+          --reference-data-path "data/processed/X_train.npy" \
+          --current-data-path "data/processed/X_test.npy" \
+          --output-report "monitoring/reports/drift_report.json" \
+          --threshold "${{ github.event.inputs.drift_threshold || '0.15' }}"
+          
+        # Read drift score from report
+        if [ -f "monitoring/reports/drift_report.json" ]; then
+          DRIFT_SCORE=$(python -c "
+import json
+with open('monitoring/reports/drift_report.json', 'r') as f:
+    data = json.load(f)
+    print(data.get('overall_drift_score', 0.0))
+          ")
+          
+          DRIFT_DETECTED=$(python -c "
+import json
+with open('monitoring/reports/drift_report.json', 'r') as f:
+    data = json.load(f)
+    print(data.get('drift_detected', False))
+          ")
+          
+          echo "drift_score=$DRIFT_SCORE" >> $GITHUB_OUTPUT
+          echo "drift_detected=$DRIFT_DETECTED" >> $GITHUB_OUTPUT
+          
+          echo "📊 Drift Analysis Results:"
+          echo "   Overall Drift Score: $DRIFT_SCORE"
+          echo "   Drift Detected: $DRIFT_DETECTED"
+          echo "   Threshold: ${{ github.event.inputs.drift_threshold || '0.15' }}"
+        else
+          echo "❌ Drift analysis failed - no report generated"
+          echo "drift_score=0.0" >> $GITHUB_OUTPUT
+          echo "drift_detected=false" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Upload drift report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: drift-report
+        path: |
+          monitoring/reports/
+          monitoring/logs/
+        retention-days: 30
+        
+    - name: Generate drift summary
+      run: |
+        echo "## 🔍 Drift Detection Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Analysis Time | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
+        echo "| Drift Score | ${{ steps.analyze.outputs.drift_score }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Drift Detected | ${{ steps.analyze.outputs.drift_detected }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Threshold | ${{ github.event.inputs.drift_threshold || '0.15' }} |" >> $GITHUB_STEP_SUMMARY
+        
+        # Add recommendations based on drift score
+        DRIFT_SCORE="${{ steps.analyze.outputs.drift_score }}"
+        THRESHOLD="${{ github.event.inputs.drift_threshold || '0.15' }}"
+        
+        if (( $(echo "$DRIFT_SCORE > $THRESHOLD" | bc -l) )); then
+          echo "### 🚨 Action Required" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Drift detected above threshold!**" >> $GITHUB_STEP_SUMMARY
+          echo "🔄 **Automatic retraining will be triggered**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ✅ Status: Stable" >> $GITHUB_STEP_SUMMARY
+          echo "🟢 **No significant drift detected**" >> $GITHUB_STEP_SUMMARY
+          echo "📈 **Model performance is stable**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+    - name: Trigger retraining workflow
+      id: trigger
+      if: |
+        (github.event.inputs.force_retrain == 'true') || 
+        (${{ steps.analyze.outputs.drift_detected }} == 'true') ||
+        (${{ steps.analyze.outputs.drift_score }} > '${{ github.event.inputs.drift_threshold || '0.15' }}')
+      run: |
+        echo "🔄 Triggering retraining workflow..."
+        
+        # Prepare payload for workflow dispatch
+        PAYLOAD=$(cat <<EOF
+        {
+          "experiment_name": "credit-risk-retrain-$(date +%Y%m%d-%H%M%S)",
+          "model_type": "random_forest",
+          "accuracy_threshold": "0.95",
+          "auc_threshold": "0.98",
+          "triggered_by": "drift-detection",
+          "drift_score": "${{ steps.analyze.outputs.drift_score }}",
+          "drift_threshold": "${{ github.event.inputs.drift_threshold || '0.15' }}",
+          "drift_detected": "${{ steps.analyze.outputs.drift_detected }}",
+          "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        }
+        EOF
+        )
+        
+        echo "triggered=true" >> $GITHUB_OUTPUT
+        
+        # Trigger the train-and-evaluate workflow
+        curl -X POST \
+          -H "Accept: application/vnd.github.v3+json" \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          https://api.github.com/repos/${{ github.repository }}/dispatches \
+          -d "{
+            \"event_type\": \"model-retrain-triggered\",
+            \"client_payload\": $PAYLOAD
+          }"
+          
+        echo "✅ Retraining workflow triggered successfully"
+        echo "📋 Workflow: train-and-evaluate"
+        echo "🔗 Repository: ${{ github.repository }}"
+        
+    - name: Wait for workflow initiation
+      if: steps.trigger.outputs.triggered == 'true'
+      run: |
+        echo "⏳ Waiting for retraining workflow to start..."
+        sleep 30
+        
+        # Check if workflow was triggered
+        WORKFLOW_ID=$(curl -s \
+          -H "Accept: application/vnd.github.v3+json" \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${{ github.repository }}/actions/workflows/train-and-evaluate.yml/runs?per_page=1" | \
+          jq -r '.workflow_runs[0].id')
+          
+        if [ -n "$WORKFLOW_ID" ]; then
+          echo "✅ Retraining workflow started (ID: $WORKFLOW_ID)"
+          echo "🔗 Monitor progress: https://github.com/${{ github.repository }}/actions/runs/$WORKFLOW_ID"
+        else
+          echo "⚠️ Could not verify workflow start"
+        fi
+        
+    - name: Post notification
+      if: always()
+      run: |
+        echo "## 📧 Notification Summary" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.trigger.outputs.triggered }}" == 'true' ]; then
+          echo "### 🔄 Retraining Triggered" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ✅ Workflow dispatched" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: Drift detection" >> $GITHUB_STEP_SUMMARY
+          echo "- **Drift Score**: ${{ steps.analyze.outputs.drift_score }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Next Steps**: Monitor training progress" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### 📊 No Retraining Required" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: 🟢 No action needed" >> $GITHUB_STEP_SUMMARY
+          echo "- **Drift Score**: ${{ steps.analyze.outputs.drift_score }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Threshold**: ${{ github.event.inputs.drift_threshold || '0.15' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Next Check**: Tomorrow at 02:00 UTC" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Add drift trend information
+        echo "### 📈 Drift Trend Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "- **Monitoring Frequency**: Daily at 02:00 UTC" >> $GITHUB_STEP_SUMMARY
+        echo "- **Last Analysis**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+        echo "- **Recommendation**: Continue daily monitoring" >> $GITHUB_STEP_SUMMARY
+        
+    - name: Create drift alert issue (optional)
+      if: |
+        (steps.trigger.outputs.triggered == 'true') && 
+        (${{ steps.analyze.outputs.drift_score }} > '${{ github.event.inputs.drift_threshold || '0.15' }}')
+      run: |
+        echo "📝 Creating drift alert issue..."
+        
+        # Create GitHub issue for drift alert
+        curl -X POST \
+          -H "Accept: application/vnd.github.v3+json" \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          https://api.github.com/repos/${{ github.repository }}/issues \
+          -d "{
+            \"title\": \"🚨 Model Drift Alert - $(date +%Y-%m-%d)\",
+            \"body\": \"## Drift Detection Alert\\n\\n### 📊 Analysis Results\\n- **Drift Score**: ${{ steps.analyze.outputs.drift_score }}\\n- **Threshold**: ${{ github.event.inputs.drift_threshold || '0.15' }}\\n- **Status**: 🚨 Drift Detected\\n- **Analysis Time**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')\\n\\n### 🔄 Action Taken\\n- **Retraining**: ✅ Triggered\\n- **Workflow**: train-and-evaluate\\n- **Expected Completion**: Within 2 hours\\n\\n### 📋 Next Steps\\n1. Monitor training progress\\n2. Review model evaluation results\\n3. Approve deployment if thresholds met\\n\\n---\\n\\n*This alert was automatically generated by the drift detection workflow.*\\n*Drift Score: ${{ steps.analyze.outputs.drift_score }}*\\n*Threshold: ${{ github.event.inputs.drift_threshold || '0.15' }}*\",
+            \"labels\": [\"drift-alert\", \"automated\", \"high-priority\"]
+          }"
+          
+        echo "✅ Drift alert issue created"
+        
+    - name: Log to monitoring dashboard
+      if: always()
+      run: |
+        echo "📊 Logging drift analysis to monitoring dashboard..."
+        
+        # Create a log entry for the monitoring system
+        LOG_ENTRY="{
+          \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+          \"drift_score\": ${{ steps.analyze.outputs.drift_score }},
+          \"drift_detected\": ${{ steps.analyze.outputs.drift_detected }},
+          \"threshold\": \"${{ github.event.inputs.drift_threshold || '0.15' }}\",
+          \"retrain_triggered\": \"${{ steps.trigger.outputs.triggered }}\",
+          \"trigger_source\": \"${{ github.event_name }}\",
+          \"workflow_run_id\": \"${{ github.run_id }}\"
+        }"
+        
+        echo "$LOG_ENTRY" >> monitoring/logs/drift_log.jsonl
+        
+        echo "📝 Drift analysis logged to monitoring system"
+        
+    - name: Update drift metrics
+      if: always()
+      run: |
+        echo "📈 Updating drift metrics in MLflow..."
+        
+        # Log drift metrics to MLflow for tracking
+        python -c "
+import mlflow
+import mlflow.sklearn
+import json
+import datetime
+import os
+
+try:
+    # Set MLflow tracking URI
+    mlflow.set_tracking_uri('${{ secrets.MLFLOW_TRACKING_URI }}')
+    
+    # Log drift metrics
+    with mlflow.start_run(run_name='drift-detection') as run:
+        mlflow.log_metric('drift_score', float('${{ steps.analyze.outputs.drift_score }}'))
+        mlflow.log_metric('drift_threshold', float('${{ github.event.inputs.drift_threshold || '0.15' }}'))
+        mlflow.log_metric('drift_detected', 1 if '${{ steps.analyze.outputs.drift_detected }}' == 'true' else 0)
+        mlflow.log_metric('retrain_triggered', 1 if '${{ steps.trigger.outputs.triggered }}' == 'true' else 0)
+        
+        # Log parameters
+        mlflow.log_param('analysis_date', datetime.datetime.utcnow().isoformat())
+        mlflow.log_param('trigger_source', '${{ github.event_name }}')
+        mlflow.log_param('workflow_run_id', '${{ github.run_id }}')
+        
+        # Log drift report as artifact if it exists
+        if os.path.exists('monitoring/reports/drift_report.json'):
+            mlflow.log_artifact('monitoring/reports/drift_report.json', 'drift_report')
+            
+    print('✅ Drift metrics logged to MLflow')
+    
+except Exception as e:
+    print(f'❌ Failed to log drift metrics: {e}')
+    exit(1)
+        "
+        
+        echo "✅ Drift metrics updated in MLflow"

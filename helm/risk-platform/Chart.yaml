@@ -1,0 +1,34 @@
+apiVersion: v2
+name: risk-platform
+description: ML Financial Risk Scoring Platform - Credit Card Fraud Detection
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+keywords:
+  - mlops
+  - machine-learning
+  - fraud-detection
+  - financial-risk
+  - credit-card
+  - fastapi
+  - mlflow
+
+home: https://github.com/elishatheodore/mlops-financial-risk-platform
+
+sources:
+  - https://github.com/elishatheodore/mlops-financial-risk-platform
+
+maintainers:
+  - name: MLOps Team
+    email: mlops@example.com
+
+annotations:
+  category: Analytics
+  licenses: MIT
+
+dependencies:
+  - name: prometheus-operator
+    version: ">=0.60.0"
+    repository: "https://prometheus-community.github.io/helm-charts"
+    condition: prometheus-operator.enabled

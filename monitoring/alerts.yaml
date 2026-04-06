@@ -1,0 +1,233 @@
+# Prometheus Alerting Rules for Financial Risk Model
+# This file defines alerting rules for monitoring the ML model performance and infrastructure
+
+groups:
+  - name: financial_risk_model
+    rules:
+      # High prediction latency alert
+      - alert: HighPredictionLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) * 1000 > 500
+        for: 5m
+        labels:
+          severity: warning
+          service: risk-platform
+          component: model-server
+        annotations:
+          summary: "High prediction latency detected"
+          description: "95th percentile prediction latency is {{ $value }}ms for the last 5 minutes, which is above the 500ms threshold."
+          runbook_url: "https://company.com/runbooks/high-latency"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+      # High error rate alert
+      - alert: HighErrorRate
+        expr: (rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])) * 100 > 1
+        for: 5m
+        labels:
+          severity: critical
+          service: risk-platform
+          component: model-server
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }}% for the last 5 minutes, which is above the 1% threshold."
+          runbook_url: "https://company.com/runbooks/high-error-rate"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+      # Model drift detected alert
+      - alert: ModelDriftDetected
+        expr: model_drift_score > 0.15
+        for: 2m
+        labels:
+          severity: warning
+          service: risk-platform
+          component: ml-model
+        annotations:
+          summary: "Model drift detected"
+          description: "Model drift score is {{ $value }}, which is above the 0.15 threshold. Consider retraining the model."
+          runbook_url: "https://company.com/runbooks/model-drift"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+      # Low model accuracy alert
+      - alert: LowModelAccuracy
+        expr: model_accuracy < 0.90
+        for: 10m
+        labels:
+          severity: critical
+          service: risk-platform
+          component: ml-model
+        annotations:
+          summary: "Low model accuracy detected"
+          description: "Model accuracy is {{ $value }}, which is below the 0.90 threshold. Immediate action required."
+          runbook_url: "https://company.com/runbooks/low-accuracy"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+      # Pod down alert
+      - alert: PodDown
+        expr: up{job="kubernetes-pods", namespace="risk-platform"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: risk-platform
+          component: infrastructure
+        annotations:
+          summary: "Model server pod is down"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been down for more than 1 minute."
+          runbook_url: "https://company.com/runbooks/pod-down"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+      # High memory usage alert
+      - alert: HighMemoryUsage
+        expr: (container_memory_usage_bytes{namespace="risk-platform", container="risk-server"} / container_spec_memory_limit_bytes{namespace="risk-platform", container="risk-server"}) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: risk-platform
+          component: infrastructure
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}% for pod {{ $labels.pod }}, which is above the 80% threshold."
+          runbook_url: "https://company.com/runbooks/high-memory"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+      # High CPU usage alert
+      - alert: HighCPUUsage
+        expr: (rate(container_cpu_usage_seconds_total{namespace="risk-platform", container="risk-server"}[5m]) / container_spec_cpu_quota{namespace="risk-platform", container="risk-server"}) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: risk-platform
+          component: infrastructure
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}% for pod {{ $labels.pod }}, which is above the 80% threshold."
+          runbook_url: "https://company.com/runbooks/high-cpu"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+      # Low prediction volume alert
+      - alert: LowPredictionVolume
+        expr: rate(http_requests_total{job="risk-platform"}[5m]) < 0.1
+        for: 15m
+        labels:
+          severity: warning
+          service: risk-platform
+          component: model-server
+        annotations:
+          summary: "Low prediction volume detected"
+          description: "Prediction rate is {{ $value }} requests/second, which is below the expected minimum."
+          runbook_url: "https://company.com/runbooks/low-volume"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+      # Model prediction bias alert
+      - alert: ModelPredictionBias
+        expr: abs(model_prediction_ratio_fraud - model_prediction_ratio_legitimate) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          service: risk-platform
+          component: ml-model
+        annotations:
+          summary: "Model prediction bias detected"
+          description: "Significant imbalance detected between fraud and legitimate prediction ratios."
+          runbook_url: "https://company.com/runbooks/prediction-bias"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+      # Data quality issues alert
+      - alert: DataQualityIssues
+        expr: data_quality_score < 0.95
+        for: 5m
+        labels:
+          severity: warning
+          service: risk-platform
+          component: data-pipeline
+        annotations:
+          summary: "Data quality issues detected"
+          description: "Data quality score is {{ $value }}, which is below the 0.95 threshold."
+          runbook_url: "https://company.com/runbooks/data-quality"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+      # Model version mismatch alert
+      - alert: ModelVersionMismatch
+        expr: model_version != expected_model_version
+        for: 1m
+        labels:
+          severity: warning
+          service: risk-platform
+          component: ml-model
+        annotations:
+          summary: "Model version mismatch detected"
+          description: "Running model version {{ $labels.model_version }} but expected {{ $labels.expected_model_version }}."
+          runbook_url: "https://company.com/runbooks/version-mismatch"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+  - name: infrastructure_health
+    rules:
+      # Disk space alert
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          service: risk-platform
+          component: infrastructure
+        annotations:
+          summary: "Low disk space detected"
+          description: "Disk space is {{ $value }}% available on node {{ $labels.instance }}."
+          runbook_url: "https://company.com/runbooks/disk-space"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+      # Network connectivity alert
+      - alert: NetworkConnectivityIssues
+        expr: rate(container_network_transmit_bytes_total{namespace="risk-platform"}[5m]) < 1000
+        for: 10m
+        labels:
+          severity: warning
+          service: risk-platform
+          component: infrastructure
+        annotations:
+          summary: "Network connectivity issues detected"
+          description: "Low network throughput detected for risk-platform pods."
+          runbook_url: "https://company.com/runbooks/network-issues"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+  - name: business_metrics
+    rules:
+      # Unusual transaction volume alert
+      - alert: UnusualTransactionVolume
+        expr: abs(rate(transaction_total[5m]) - avg(rate(transaction_total[1h]) over_time 1h)) / avg(rate(transaction_total[1h]) over_time 1h) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: risk-platform
+          component: business
+        annotations:
+          summary: "Unusual transaction volume detected"
+          description: "Transaction volume has changed by more than 50% compared to the hourly average."
+          runbook_url: "https://company.com/runbooks/unusual-volume"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+      # High fraud rate alert
+      - alert: HighFraudRate
+        expr: rate(fraud_transactions_total[5m]) / rate(transaction_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: risk-platform
+          component: business
+        annotations:
+          summary: "High fraud rate detected"
+          description: "Fraud rate is {{ $value | humanizePercentage }}, which is above the 5% threshold."
+          runbook_url: "https://company.com/runbooks/high-fraud-rate"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"
+
+      # Model performance degradation alert
+      - alert: ModelPerformanceDegradation
+        expr: (model_accuracy - model_accuracy_baseline) / model_accuracy_baseline < -0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: risk-platform
+          component: ml-model
+        annotations:
+          summary: "Model performance degradation detected"
+          description: "Model accuracy has degraded by more than 5% compared to baseline."
+          runbook_url: "https://company.com/runbooks/performance-degradation"
+          dashboard_url: "https://grafana.company.com/d/risk-platform"

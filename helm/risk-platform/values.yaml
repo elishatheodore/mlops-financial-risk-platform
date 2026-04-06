@@ -1,0 +1,431 @@
+# Default values for risk-platform Helm chart
+# This is a YAML-formatted file
+# Declare variables to be passed into your templates
+
+# Replica count
+replicaCount: 2
+
+# Image configuration
+image:
+  repository: ghcr.io/elishatheodore/mlops-financial-risk-platform/risk-server
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+# Image pull secrets
+imagePullSecrets: []
+# - name: myRegistryKey
+#   server: my.docker.registry
+
+# Service account configuration
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod security context
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8000
+  targetPort: 8000
+  annotations: {}
+  # cloud.google.com/load-balancer-type: "Internal"
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: risk-platform.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: risk-platform-tls
+      hosts:
+        - risk-platform.example.com
+
+# Resource configuration
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Environment variables
+env:
+  - name: PORT
+    value: "8000"
+  - name: HOST
+    value: "0.0.0.0"
+  - name: MODEL_NAME
+    value: "financial-risk-model"
+  - name: MLFLOW_TRACKING_URI
+    valueFrom:
+      configMapKeyRef:
+        name: risk-platform-config
+        key: mlflow-tracking-uri
+
+# Additional environment variables from secrets
+envFromSecret: []
+
+# Additional environment variables from configmaps
+envFromConfigMap: []
+
+# ConfigMap configuration
+configMap:
+  # MLflow configuration
+  mlflow:
+    trackingUri: "http://mlflow.mlflow.svc.cluster.local:5000"
+    registryUri: "http://mlflow.mlflow.svc.cluster.local:5000"
+  
+  # Application configuration
+  app:
+    logLevel: "INFO"
+    debug: "false"
+    metricsEnabled: "true"
+
+# Secret configuration
+secret:
+  # Base64 encoded values
+  mlflowTrackingUri: ""
+  # To generate: echo -n "http://mlflow.mlflow.svc.cluster.local:5000" | base64
+
+# Liveness probe
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+
+# Readiness probe
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+  successThreshold: 1
+
+# Startup probe
+startupProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+  successThreshold: 1
+
+# Prometheus ServiceMonitor
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  labels:
+    release: prometheus
+  interval: 30s
+  scrapeTimeout: 10s
+  honorLabels: true
+  relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_label_prometheus_io_scrape]
+      action: keep
+      regex: true
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# Network policies
+networkPolicy:
+  enabled: false
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: ingress-nginx
+      - podSelector:
+          matchLabels:
+            app: prometheus
+    ports:
+      - protocol: TCP
+        port: 8000
+  egress:
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            name: mlflow
+    ports:
+      - protocol: TCP
+        port: 5000
+
+# Pod priority and preemption
+priorityClassName: ""
+
+# Additional volumes
+volumes: []
+# - name: config-volume
+#   configMap:
+#     name: risk-platform-config
+
+# Additional volume mounts
+volumeMounts: []
+# - name: config-volume
+#   mountPath: /app/config
+
+# Init containers
+initContainers: []
+# - name: wait-for-mlflow
+#   image: busybox:1.35
+#   command:
+#   - sh
+#   - -c
+#   - |
+#     until nc -z mlflow.mlflow.svc.cluster.local 5000; do
+#       echo "Waiting for MLflow..."
+#       sleep 2
+#     done
+
+# Sidecar containers
+sidecars: []
+# - name: log-shipper
+#   image: fluent/fluent-bit:1.9
+#   resources:
+#     limits:
+#       cpu: 100m
+#       memory: 128Mi
+
+# Custom labels
+customLabels: {}
+  # team: mlops
+  # environment: production
+
+# Custom annotations
+customAnnotations: {}
+  # prometheus.io/scrape: "true"
+  # prometheus.io/port: "8000"
+  # prometheus.io/path: "/metrics"
+
+# Pod topology spread constraints
+topologySpreadConstraints: []
+# - maxSkew: 1
+#   topologyKey: "kubernetes.io/hostname"
+#   whenUnsatisfiable: DoNotSchedule
+#   labelSelector:
+#     matchLabels:
+#       app.kubernetes.io/name: risk-platform
+
+# Update strategy
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+    maxSurge: 1
+
+# Pod management policy
+podManagementPolicy: Parallel
+
+# Termination grace period
+terminationGracePeriodSeconds: 30
+
+# DNS configuration
+dnsConfig: {}
+#   nameservers:
+#   - 8.8.8.8
+#   searches:
+#   - my.dns.search.suffix
+
+# Host aliases
+hostAliases: []
+# - ip: "127.0.0.1"
+#   hostnames:
+#   - "foo.local"
+#   - "bar.local"
+
+# Runtime class name
+runtimeClassName: ""
+
+# Share process namespace
+shareProcessNamespace: false
+
+# Additional containers
+additionalContainers: []
+
+# Service mesh configuration
+istio:
+  enabled: false
+  # mTLS policy
+  mtls:
+    mode: PERMISSIVE
+  # Traffic management
+  trafficManagement:
+    enabled: false
+    # Virtual service configuration
+    virtualService:
+      enabled: false
+      hosts:
+      - risk-platform.example.com
+      gateways:
+      - risk-platform-gateway
+
+# ArgoCD annotations
+argoCD:
+  enabled: false
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+
+# Application configuration
+config:
+  logLevel: INFO
+  modelPath: /app/model/model.pkl
+  mlflowTrackingUri: http://mlflow:5000
+  prometheusEnabled: true
+
+# Secret configuration
+secrets:
+  secretKey: "your-secret-key-here"
+  databaseUrl: "postgresql://user:password@localhost:5432/riskdb"
+
+# Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /metrics
+    port: http
+
+# Health checks
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Persistent volume for model storage
+persistence:
+  enabled: true
+  storageClass: "standard"
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  mountPath: /app/model
+
+# Environment variables
+env:
+  - name: API_HOST
+    value: "0.0.0.0"
+  - name: API_PORT
+    value: "8000"
+  - name: LOG_LEVEL
+    valueFrom:
+      configMapKeyRef:
+        name: {{ include "risk-platform.fullname" . }}
+        key: logLevel
+  - name: MODEL_PATH
+    valueFrom:
+      configMapKeyRef:
+        name: {{ include "risk-platform.fullname" . }}
+        key: modelPath
+  - name: MLFLOW_TRACKING_URI
+    valueFrom:
+      configMapKeyRef:
+        name: {{ include "risk-platform.fullname" . }}
+        key: mlflowTrackingUri
+  - name: SECRET_KEY
+    valueFrom:
+      secretKeyRef:
+        name: {{ include "risk-platform.fullname" . }}
+        key: secretKey
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: {{ include "risk-platform.fullname" . }}
+        key: databaseUrl

@@ -1,0 +1,466 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# MLflow
+mlartifacts/
+mlruns/
+wandb/
+weights_and_biases/
+
+# DVC
+.dvc/
+.dvcignore
+.dvc/tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Data files
+data/
+*.csv
+*.parquet
+!tests/test_data.csv
+!package.json
+!requirements*.txt
+!pyproject.toml
+
+# Models
+models/
+mlruns/
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+*.pb
+
+# Logs
+logs/
+*.log
+
+# Monitoring and metrics
+metrics/
+monitoring/data/
+monitoring/logs/
+
+# Grafana dashboard (except for the main dashboard)
+monitoring/grafana-dashboard-*.json
+!monitoring/grafana-dashboard.json
+
+# Prediction logs (except for sample)
+monitoring/prediction_logs-*.json
+!monitoring/prediction_logs.json
+
+# Test artifacts
+test-results/
+test-reports/
+test-artifacts/
+
+# Documentation build
+docs/build/
+docs/_build/
+
+# Experiment tracking
+experiments/
+results/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Kubernetes
+*.kubeconfig
+
+# Docker
+.dockerignore
+
+# AWS
+.aws/
+
+# Azure
+.azure/
+
+# GCP
+.gcp/
+
+# Secrets
+secrets/
+*.key
+*.pem
+*.crt
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Backup files
+*.bak
+*.backup
+
+# Archive files
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Test files are allowed
+!tests/
+tests/__init__.py
+tests/*.py
+
+# Secrets
+*.key
+*.pem
+*.crt
+*.p12
+secrets/
+.secrets
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Cache directories
+.cache/
+cache/
+
+# Build artifacts
+build/
+dist/
+target/
+
+# Coverage reports
+coverage/
+.coverage
+*.coverage
+
+# Profiling
+*.prof
+*.profile
+
+# Benchmarking
+benchmark/
+*.benchmark
+
+# Performance monitoring
+*.perf
+*.trace
+
+# Local development
+.local/
+local/
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Configuration overrides
+config.local.yaml
+config.dev.yaml
+config.prod.yaml
+config.local.json
+config.dev.json
+config.prod.json
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Node.js (if any frontend components)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# AWS credentials
+.aws/
+.aws-credentials
+
+# GCP credentials
+.gcp/
+gcp-credentials.json
+
+# Azure credentials
+.azure/
+azure-credentials.json
+
+# Monitoring and metrics
+metrics/
+monitoring/data/
+monitoring/logs/
+
+# Grafana dashboard (except for the main dashboard)
+monitoring/grafana-dashboard-*.json
+!monitoring/grafana-dashboard.json
+
+# Prediction logs (except for sample)
+monitoring/prediction_logs-*.json
+!monitoring/prediction_logs.json
+
+# Test outputs
+test-results/
+test-reports/
+test-artifacts/
+
+# Documentation build
+docs/build/
+docs/_build/
+
+# Experiment tracking
+experiments/
+experiment_results/
+
+# Feature store
+feature_store/
+.feature_store/
+
+# Pipeline artifacts
+pipeline_artifacts/
+artifacts/
+
+# Airflow (if used)
+airflow.cfg
+airflow_home/
+dags/__pycache__/
+
+# Prefect (if used)
+.prefect/
+
+# Kubeflow (if used)
+.kubeflow/
+
+# ML specific
+mlartifacts/
+mlruns/
+wandb/
+weights_and_biases/
+
+# Data versioning
+.dvc/
+.dvcignore
+
+# Large files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+*.iso
+*.dmg
+*.img
+
+# Compiled binaries
+*.exe
+*.msi
+*.deb
+*.rpm
+*.bin
+
+# Compiled libraries
+*.dll
+*.dylib
+*.so.*
+
+# Package files
+*.egg
+*.whl
+
+# Configuration files with secrets
+.env.local
+.env.dev
+.env.prod
+config/secrets.yaml
+config/secrets.json
+
+# Local overrides
+docker-compose.override.yml
+docker-compose.dev.yml
+docker-compose.prod.yml
+
+# Temporary experiment files
+experiment_*.py
+test_*.py
+debug_*.py
+temp_*.py
+
+# Backup and versioning
+*.backup
+*.old
+*.orig
+*.rej
+
+# Security scan results
+security-scan-results/
+vulnerability-reports/
+
+# Performance test results
+perf-results/
+load-test-results/
+
+# Documentation drafts
+docs/draft/
+docs/wip/
+
+# Local scripts
+scripts/local/
+scripts/dev-only/
+scripts/prod-only/
+
+# Generated files
+generated/
+auto-generated/
+
+# Third-party downloads
+third-party/
+external/
+
+# License files
+LICENSE.txt
+LICENSE.md
+
+# README drafts
+README-draft.md
+README-wip.md

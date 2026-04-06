@@ -1,0 +1,71 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: risk-platform-prod
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: risk-platform-prod
+    app.kubernetes.io/component: argocd-application
+    app.kubernetes.io/part-of: argocd
+  annotations:
+    argocd.argoproj.io/sync-options: CreateNamespace=true
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/elishatheodore/mlops-financial-risk-platform
+    targetRevision: HEAD
+    path: helm/risk-platform
+    helm:
+      valueFiles:
+        - values-prod.yaml
+      releaseName: risk-platform-prod
+      parameters:
+        - name: image.tag
+          value: "latest"
+        - name: ingress.hosts[0].host
+          value: "risk-platform-prod.company.com"
+        - name: serviceMonitor.enabled
+          value: true
+        - name: autoscaling.enabled
+          value: true
+        - name: resources.requests.cpu
+          value: "500m"
+        - name: resources.requests.memory
+          value: "1Gi"
+        - name: resources.limits.cpu
+          value: "2000m"
+        - name: resources.limits.memory
+          value: "4Gi"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: risk-platform
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        factor: 2
+        maxDuration: 5m
+        duration: 5s
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: risk-platform-prod
+      jsonPointers:
+        - /spec/replicas
+  revisionHistoryLimit: 3
+  info:
+    - name: Environment
+      value: Production
+    - name: Namespace
+      value: risk-platform
+    - name: Repository
+      value: https://github.com/elishatheodore/mlops-financial-risk-platform
+    - name: Path
+      value: helm/risk-platform
+    - name: Values File
+      value: values-prod.yaml

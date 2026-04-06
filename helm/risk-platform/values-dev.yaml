@@ -1,0 +1,51 @@
+# Development environment values for risk-platform chart
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/elishatheodore/mlops-financial-risk-platform/risk-server
+  pullPolicy: Always
+  tag: "dev"
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+autoscaling:
+  enabled: false
+
+# Development configuration
+config:
+  logLevel: DEBUG
+  modelPath: /app/model/model.pkl
+  mlflowTrackingUri: http://mlflow-dev:5000
+  prometheusEnabled: true
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+  hosts:
+    - host: risk-platform-dev.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: risk-platform-dev-tls
+      hosts:
+        - risk-platform-dev.example.com
+
+# Faster health checks for development
+livenessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+readinessProbe:
+  initialDelaySeconds: 3
+  periodSeconds: 3

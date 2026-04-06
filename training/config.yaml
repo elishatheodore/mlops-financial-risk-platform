@@ -1,0 +1,42 @@
+# Configuration for credit card fraud detection training
+
+# Model parameters
+model_params:
+  random_forest:
+    n_estimators: 100
+    max_depth: 10
+    random_state: 42
+    n_jobs: -1
+    class_weight: balanced
+  
+  xgboost:
+    n_estimators: 100
+    max_depth: 6
+    random_state: 42
+    n_jobs: -1
+    eval_metric: logloss
+    use_label_encoder: false
+
+# Data processing parameters
+processing:
+  test_size: 0.2
+  random_state: 42
+  smote_random_state: 42
+
+# MLflow configuration
+mlflow:
+  tracking_uri: http://localhost:5000
+  experiment_name: credit-card-fraud-detection
+  
+# File paths
+paths:
+  raw_data: ../data/raw/creditcard.csv
+  processed_data_dir: ../data/processed
+  plots_dir: ../data/processed/plots
+  evaluation_plots_dir: ../data/processed/evaluation_plots
+
+# Visualization settings
+visualization:
+  figure_size: [10, 6]
+  dpi: 300
+  color_palette: blues

@@ -1,0 +1,127 @@
+# Production environment values for risk-platform chart
+
+replicaCount: 3
+
+image:
+  repository: ghcr.io/elishatheodore/mlops-financial-risk-platform/risk-server
+  pullPolicy: IfNotPresent
+  tag: "v1.0.0"
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max
+
+# Production configuration
+config:
+  logLevel: INFO
+  modelPath: /app/model/model.pkl
+  mlflowTrackingUri: https://mlflow.company.com
+  prometheusEnabled: true
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
+      more_set_headers "Content-Security-Policy: default-src 'self'";
+  hosts:
+    - host: risk-platform.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: risk-platform-prod-tls
+      hosts:
+        - risk-platform.example.com
+# Production secrets (should be overridden by external secret management)
+secrets:
+  secretKey: "production-secret-key"
+  databaseUrl: "postgresql://user:password@postgres-prod:5432/riskdb"
+
+persistence:
+  enabled: true
+  storageClass: "fast-ssd"
+  size: 2Gi
+
+# Production health checks
+livenessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Additional production configurations
+nodeSelector:
+  node-type: application
+
+tolerations:
+  - key: "application"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - risk-platform
+          topologyKey: kubernetes.io/hostname
+
+# Monitoring configuration for production
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+    additionalLabels:
+      release: prometheus-operator

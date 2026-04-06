@@ -1,0 +1,243 @@
+name: Train and Evaluate Model
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'training/**'
+  workflow_dispatch:
+    inputs:
+      experiment_name:
+        description: 'MLflow experiment name'
+        required: false
+        default: 'credit-risk-prod'
+        type: string
+      model_type:
+        description: 'Model type to train'
+        required: false
+        default: 'random_forest'
+        type: string
+      accuracy_threshold:
+        description: 'Accuracy threshold for model evaluation'
+        required: false
+        default: '0.95'
+        type: string
+      auc_threshold:
+        description: 'AUC threshold for model evaluation'
+        required: false
+        default: '0.98'
+        type: string
+
+env:
+  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    outputs:
+      run_id: ${{ steps.train.outputs.run_id }}
+      experiment_name: ${{ steps.train.outputs.experiment_name }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('training/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install training dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r training/requirements.txt
+        
+    - name: Create data directories
+      run: |
+        mkdir -p data/raw data/processed data/models
+        
+    - name: Check for dataset
+      run: |
+        if [ ! -f "data/raw/creditcard.csv" ]; then
+          echo "❌ Dataset not found: data/raw/creditcard.csv"
+          echo "📋 Please place the creditcard.csv file in the data/raw/ directory"
+          echo "📊 Download the dataset from: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud"
+          exit 1
+        else
+          echo "✅ Dataset found: data/raw/creditcard.csv"
+          ls -la data/raw/
+        fi
+        
+    - name: Run feature engineering
+      run: |
+        cd training
+        python feature_engineering.py
+        
+    - name: Train model
+      id: train
+      run: |
+        cd training
+        python train.py \
+          --experiment-name "${{ github.event.inputs.experiment_name || 'credit-risk-prod' }}" \
+          --model-type "${{ github.event.inputs.model_type || 'random_forest' }}"
+      env:
+        MLFLOW_EXPERIMENT_NAME: ${{ github.event.inputs.experiment_name || 'credit-risk-prod' }}
+        
+    - name: Upload training artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: training-artifacts
+        path: |
+          training/logs/
+          training/models/
+        retention-days: 7
+        
+    - name: Generate training summary
+      run: |
+        echo "## 🚀 Training Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Experiment | ${{ github.event.inputs.experiment_name || 'credit-risk-prod' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Model Type | ${{ github.event.inputs.model_type || 'random_forest' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Status | ✅ Completed |" >> $GITHUB_STEP_SUMMARY
+        
+  evaluate:
+    needs: train
+    runs-on: ubuntu-latest
+    if: always() && needs.train.result == 'success'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('training/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install evaluation dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r training/requirements.txt
+        
+    - name: Create data directories
+      run: |
+        mkdir -p data/processed
+        
+    - name: Check for processed data
+      run: |
+        if [ ! -f "data/processed/X_test.npy" ] || [ ! -f "data/processed/y_test.npy" ]; then
+          echo "❌ Processed data not found. Running feature engineering first..."
+          cd training
+          python feature_engineering.py
+        else
+          echo "✅ Processed data found"
+        fi
+        
+    - name: Evaluate model
+      id: evaluate
+      run: |
+        cd training
+        python evaluate.py \
+          --experiment-name "${{ needs.train.outputs.experiment_name }}" \
+          --accuracy-threshold "${{ github.event.inputs.accuracy_threshold || '0.95' }}" \
+          --auc-threshold "${{ github.event.inputs.auc_threshold || '0.98' }}"
+      continue-on-error: true
+        
+    - name: Upload evaluation report
+      uses: actions/upload-artifact@v3
+      with:
+        name: evaluation-report
+        path: training/evaluation_report.json
+        retention-days: 30
+        
+    - name: Check evaluation result
+      run: |
+        if [ -f "training/evaluation_report.json" ]; then
+          echo "✅ Evaluation completed successfully"
+          
+          # Extract key metrics from the report
+          ACCURACY=$(python -c "
+          import json
+          with open('training/evaluation_report.json', 'r') as f:
+              data = json.load(f)
+          print(data.get('best_run_metrics', {}).get('accuracy', 'N/A'))
+          ")
+          
+          AUC=$(python -c "
+          import json
+          with open('training/evaluation_report.json', 'r') as f:
+              data = json.load(f)
+          print(data.get('best_run_metrics', {}).get('roc_auc', 'N/A'))
+          ")
+          
+          MODEL_VERSION=$(python -c "
+          import json
+          with open('training/evaluation_report.json', 'r') as f:
+              data = json.load(f)
+          print(data.get('model_version', 'N/A'))
+          ")
+          
+          PROMOTION_STATUS=$(python -c "
+          import json
+          with open('training/evaluation_report.json', 'r') as f:
+              data = json.load(f)
+          print(data.get('promotion_status', 'unknown'))
+          ")
+          
+          echo "## 📊 Evaluation Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Accuracy | $ACCURACY |" >> $GITHUB_STEP_SUMMARY
+          echo "| AUC | $AUC |" >> $GITHUB_STEP_SUMMARY
+          echo "| Model Version | $MODEL_VERSION |" >> $GITHUB_STEP_SUMMARY
+          echo "| Promotion Status | $PROMOTION_STATUS |" >> $GITHUB_STEP_SUMMARY
+          
+          # Check if evaluation passed thresholds
+          THRESHOLD_ACCURACY="${{ github.event.inputs.accuracy_threshold || '0.95' }}"
+          THRESHOLD_AUC="${{ github.event.inputs.auc_threshold || '0.98' }}"
+          
+          if [ "$PROMOTION_STATUS" = "promoted" ]; then
+            echo "✅ Model passed all thresholds and was promoted to Production" >> $GITHUB_STEP_SUMMARY
+            echo "🎯 Ready for deployment!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Model failed to meet thresholds" >> $GITHUB_STEP_SUMMARY
+            echo "📈 Required: Accuracy ≥ $THRESHOLD_ACCURACY, AUC ≥ $THRESHOLD_AUC" >> $GITHUB_STEP_SUMMARY
+            echo "� Model needs improvement before deployment" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+        else
+          echo "❌ Evaluation failed - no report generated"
+          exit 1
+        fi
+        
+    - name: Trigger deployment workflow
+      if: success()
+      uses: peter-evans/repository-dispatch@v2
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        event-type: model-ready-for-deployment
+        client-payload: |
+          {
+            "experiment_name": "${{ needs.train.outputs.experiment_name }}",
+            "model_version": "${{ steps.evaluate.outputs.model_version }}",
+            "evaluation_status": "passed",
+            "run_id": "${{ needs.train.outputs.run_id }}"
+          }       # This would trigger the build-and-deploy workflow
+        # curl -X POST ... (webhook to trigger deployment)
