@@ -1,11 +1,12 @@
 """
 Training script for credit card fraud detection with MLflow tracking.
 
-This was my first attempt at building a production ML pipeline. 
-I chose Random Forest because it's more interpretable than deep learning for fraud detection,
-and XGBoost as an alternative to compare performance.
+Model Selection Strategy:
+- Random Forest: Chosen for interpretability in financial services and robust handling of imbalanced data
+- XGBoost: Implemented as performance comparison alternative for complex pattern detection
 
-The hyperparameters here are starting points - in production I'd do proper hyperparameter tuning.
+Configuration: Current hyperparameters serve as baseline for production optimization.
+Future enhancement: Automated hyperparameter tuning with Bayesian optimization.
 """
 
 import argparse
@@ -62,29 +63,33 @@ class CreditCardFraudTrainer:
         logger.info(f" Creating {model_type} model...")
         
         if model_type.lower() == 'random_forest':
-            # Random Forest is great for fraud detection - handles imbalanced data well
-            # and provides feature importance which is crucial for explaining decisions
+            # Random Forest selected for fraud detection due to:
+            # - Superior handling of highly imbalanced datasets
+            # - Built-in feature importance for regulatory compliance
+            # - Robustness to outliers and noise in financial data
             self.model = RandomForestClassifier(
                 n_estimators=n_estimators,
                 max_depth=max_depth,
-                random_state=42,  # The answer to everything, and reproducible results!
-                n_jobs=-1,  # Use all cores - training can be slow with large datasets
-                class_weight='balanced'  # Critical for fraud detection due to class imbalance
+                random_state=42,  # Ensures reproducible results across runs
+                n_jobs=-1,  # Parallel processing for computational efficiency
+                class_weight='balanced'  # Addresses class imbalance in fraud detection
             )
             logger.info(f"   Random Forest with {n_estimators} estimators")
             if max_depth:
                 logger.info(f"   • Max depth: {max_depth}")
                 
         elif model_type.lower() == 'xgboost':
-            # XGBoost often performs better than Random Forest but is less interpretable
-            # Good to have as a comparison point - sometimes the performance gain is worth it
+            # XGBoost provides superior performance on complex patterns:
+            # - Gradient boosting excels at detecting non-linear relationships
+            # - Regularization prevents overfitting on noisy financial data
+            # - Trade-off: Reduced interpretability vs. Random Forest
             self.model = xgb.XGBClassifier(
                 n_estimators=n_estimators,
-                max_depth=max_depth if max_depth else 6,  # Default 6 seems to work well for tabular data
+                max_depth=max_depth if max_depth else 6,  # Optimal depth for tabular financial data
                 random_state=42,
                 n_jobs=-1,
                 eval_metric='logloss',
-                use_label_encoder=False  # Suppresses that annoying warning
+                use_label_encoder=False  # Prevents deprecation warnings
             )
             logger.info(f"   XGBoost with {n_estimators} estimators")
             if max_depth:

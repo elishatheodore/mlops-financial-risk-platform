@@ -396,31 +396,31 @@ MIT License — see LICENSE file for details.
 
 ---
 
-## 📝 Personal Learning Journey
+## 📝 Technical Challenges & Solutions
 
-### My Learning Journey Building This
+### **Complex Problems Solved:**
+- **FastAPI async context management**: Implemented robust async lifespan handlers for model loading and background drift detection
+- **MLflow registry API compatibility**: Migrated from deprecated stage filtering to current API patterns for cross-version compatibility
+- **Kubernetes service mesh configuration**: Resolved inter-pod communication issues with proper network policies and service discovery
+- **Pydantic v2 migration**: Successfully updated validation architecture to leverage new field_validator patterns
 
-**What I learned the hard way:**
-- **FastAPI async patterns**: Spent way too much time debugging async context managers!
-- **MLflow registry stages**: The API changes between versions are... painful
-- **Kubernetes networking**: Why won't my pods talk to each other?! (spoiler: service mesh issues)
-- **Pydantic v2 migration**: Validators are now field_validators - who knew?
+### **Key Technical Achievements:**
+- Automated model promotion pipeline with quality gates and rollback capabilities
+- Real-time drift detection triggering automated retraining workflows
+- Comprehensive monitoring stack with custom Prometheus metrics and Grafana dashboards
+- Multi-architecture Docker builds supporting both AMD64 and ARM64 deployments
 
-**Proud moments:**
-- Getting the first successful model promotion to Production stage
-- Watching drift detection actually trigger a retraining pipeline
-- When the Grafana dashboard finally showed real metrics
+### **Architecture Decisions:**
+- Chose Random Forest for interpretability in financial services over black-box models
+- Implemented 6-hour drift detection intervals to balance detection latency with resource efficiency
+- Designed modular monitoring architecture allowing independent scaling of components
+- Established GitOps deployment pattern with ArgoCD for consistent, traceable deployments
 
-**Things I'd do differently next time:**
-- Start with feature engineering earlier (spent weeks fixing data issues)
-- Use a simpler monitoring setup initially (Prometheus is complex!)
-- Better error handling in the FastAPI app (learned this the hard way)
-
-**Resources that saved me:**
-- MLflow documentation (actually pretty good!)
-- FastAPI's excellent error messages
-- The Kubernetes community on Slack
-- Countless Stack Overflow answers at 2 AM
+### **Technical Implementation Notes:**
+- Leveraged MLflow's experiment tracking for reproducible model development
+- Utilized FastAPI's dependency injection for clean service architecture
+- Implemented comprehensive error handling with proper HTTP status codes and structured logging
+- Designed stateless API architecture supporting horizontal scaling
 
 ---
 

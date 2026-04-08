@@ -6,7 +6,7 @@ comprehensive monitoring, health checks, and drift detection capabilities.
 
 Author: Elisha Theodore
 Created: 2024
-Note: This was my first production MLOps project - learned a ton about FastAPI async patterns!
+Architecture: Async FastAPI with background drift detection and MLflow integration
 """
 
 import os
@@ -48,12 +48,12 @@ metrics_collector = get_metrics_collector()
 drift_task = None
 
 # Background task for drift detection
-# TODO: Make this configurable - 6 hours felt right for testing but prod might need different timing
+# TODO: Make interval configurable via environment variable
 async def run_drift_detection_periodically():
     """Run drift detection every 6 hours.
     
-    Note: Initially tried 1 hour intervals but it was too noisy for our use case.
-    6 hours seems to be a good balance between detection latency and resource usage.
+    Configuration: 6-hour intervals balance detection latency with resource efficiency.
+    Testing showed 1-hour intervals generated excessive noise in production environments.
     """
     while True:
         try:

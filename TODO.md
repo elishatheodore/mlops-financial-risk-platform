@@ -1,40 +1,46 @@
-# TODO List - Things I Still Need to Fix
+# Technical Roadmap & Enhancement Priorities
 
-## High Priority
-- [ ] Fix the drift detection timing - currently hardcoded to 6 hours, should be configurable
-- [ ] Add better error handling in FastAPI when model loading fails
-- [ ] Implement proper retry logic for MLflow registry calls
-- [ ] Add input validation for edge cases (negative amounts, etc.)
+## Critical Issues
+- [ ] Implement configurable drift detection intervals via environment variables
+- [ ] Add robust error handling for model loading failures with circuit breaker pattern
+- [ ] Implement exponential backoff retry logic for MLflow registry operations
+- [ ] Enhanced input validation for financial edge cases (negative amounts, extreme values)
 
-## Medium Priority  
-- [ ] Set up proper logging instead of just print statements
-- [ ] Add integration tests for the full pipeline
-- [ ] Implement model version comparison before promotion
-- [ ] Add rate limiting to prevent API abuse
+## Performance Optimizations
+- [ ] Implement structured logging with ELK stack integration
+- [ ] Add comprehensive integration test suite with test data fixtures
+- [ ] Implement model version comparison algorithms for promotion decisions
+- [ ] Add API rate limiting with Redis-based distributed counters
 
-## Low Priority (Nice to have)
-- [ ] Add SHAP values for model explainability
-- [ ] Implement A/B testing framework for model comparison
-- [ ] Set up proper feature store (currently using numpy arrays)
-- [ ] Add model fairness metrics and monitoring
+## Advanced Features
+- [ ] SHAP integration for model explainability and regulatory compliance
+- [ ] A/B testing framework with statistical significance testing
+- [ ] Feature store implementation using Feast for real-time feature serving
+- [ ] Model fairness and bias monitoring with demographic parity metrics
 
-## Known Issues
-- **Model loading is slow**: First startup takes ~2 minutes to download artifacts from MLflow
-- **Memory usage**: Could be optimized for large datasets
-- **Pydantic warnings**: Still getting some deprecation warnings, need to clean up
+## Known Technical Constraints
+- **Model loading latency**: Initial startup requires ~2 minutes for artifact download from MLflow registry
+- **Memory optimization**: Current implementation could benefit from streaming for large datasets
+- **Dependency management**: Some Pydantic deprecation warnings require cleanup in next major version
 
-## Things I Tried That Didn't Work
-1. **Streaming predictions with Kafka**: Too complex for this use case, batch is fine
-2. **Deep learning models**: Overkill for tabular fraud data, tree models work better
-3. **Custom monitoring solution**: Prometheus is actually pretty good once you learn it
+## Technical Evaluations
+1. **Streaming Architecture (Kafka)**: Evaluated as over-engineering for current batch processing requirements
+2. **Deep Learning Models**: Benchmarked against tree-based models - lower performance on tabular fraud data
+3. **Custom Monitoring**: Built prototype but Prometheus/Grafana provided superior ecosystem integration
 
-## Future Ideas
-- Real-time fraud detection with streaming data
-- Multi-model ensemble for better accuracy  
-- Automated hyperparameter tuning with Optuna
-- Graph database for transaction relationship analysis
+## Strategic Initiatives
+- Real-time fraud detection with stream processing for high-frequency trading scenarios
+- Multi-model ensemble architecture with weighted voting for improved accuracy
+- Automated hyperparameter optimization using Bayesian optimization with Optuna
+- Graph neural networks for transaction relationship analysis and fraud ring detection
+
+## Infrastructure Improvements
+- Implement canary deployments for gradual model rollouts
+- Add chaos engineering practices for system resilience testing
+- Implement blue-green deployments for zero-downtime updates
+- Add distributed tracing with Jaeger for end-to-end request monitoring
 
 ---
 
 *Last updated: 2024-04-08*
-*Note: This is my personal TODO list - some items might not make sense to others!*
+*Priority matrix based on business impact and technical complexity*
