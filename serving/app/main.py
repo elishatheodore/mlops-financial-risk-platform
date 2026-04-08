@@ -3,6 +3,10 @@ FastAPI application for credit card fraud detection model serving.
 
 This module provides a REST API for fraud detection predictions with
 comprehensive monitoring, health checks, and drift detection capabilities.
+
+Author: Elisha Theodore
+Created: 2024
+Note: This was my first production MLOps project - learned a ton about FastAPI async patterns!
 """
 
 import os
@@ -44,8 +48,13 @@ metrics_collector = get_metrics_collector()
 drift_task = None
 
 # Background task for drift detection
+# TODO: Make this configurable - 6 hours felt right for testing but prod might need different timing
 async def run_drift_detection_periodically():
-    """Run drift detection every 6 hours."""
+    """Run drift detection every 6 hours.
+    
+    Note: Initially tried 1 hour intervals but it was too noisy for our use case.
+    6 hours seems to be a good balance between detection latency and resource usage.
+    """
     while True:
         try:
             logger.info("Starting scheduled drift detection...")

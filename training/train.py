@@ -1,5 +1,11 @@
 """
 Training script for credit card fraud detection with MLflow tracking.
+
+This was my first attempt at building a production ML pipeline. 
+I chose Random Forest because it's more interpretable than deep learning for fraud detection,
+and XGBoost as an alternative to compare performance.
+
+The hyperparameters here are starting points - in production I'd do proper hyperparameter tuning.
 """
 
 import argparse
@@ -53,30 +59,34 @@ class CreditCardFraudTrainer:
     
     def create_model(self, model_type: str, n_estimators: int = 100, max_depth: int = None):
         """Create the specified model with given hyperparameters."""
-        logger.info(f"🤖 Creating {model_type} model...")
+        logger.info(f" Creating {model_type} model...")
         
         if model_type.lower() == 'random_forest':
+            # Random Forest is great for fraud detection - handles imbalanced data well
+            # and provides feature importance which is crucial for explaining decisions
             self.model = RandomForestClassifier(
                 n_estimators=n_estimators,
                 max_depth=max_depth,
-                random_state=42,
-                n_jobs=-1,
-                class_weight='balanced'
+                random_state=42,  # The answer to everything, and reproducible results!
+                n_jobs=-1,  # Use all cores - training can be slow with large datasets
+                class_weight='balanced'  # Critical for fraud detection due to class imbalance
             )
-            logger.info(f"   • Random Forest with {n_estimators} estimators")
+            logger.info(f"   Random Forest with {n_estimators} estimators")
             if max_depth:
                 logger.info(f"   • Max depth: {max_depth}")
                 
         elif model_type.lower() == 'xgboost':
+            # XGBoost often performs better than Random Forest but is less interpretable
+            # Good to have as a comparison point - sometimes the performance gain is worth it
             self.model = xgb.XGBClassifier(
                 n_estimators=n_estimators,
-                max_depth=max_depth if max_depth else 6,
+                max_depth=max_depth if max_depth else 6,  # Default 6 seems to work well for tabular data
                 random_state=42,
                 n_jobs=-1,
                 eval_metric='logloss',
-                use_label_encoder=False
+                use_label_encoder=False  # Suppresses that annoying warning
             )
-            logger.info(f"   • XGBoost with {n_estimators} estimators")
+            logger.info(f"   XGBoost with {n_estimators} estimators")
             if max_depth:
                 logger.info(f"   • Max depth: {max_depth}")
         else:

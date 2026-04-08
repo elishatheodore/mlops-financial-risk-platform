@@ -1,12 +1,16 @@
 # MLOps Financial Risk Platform
 
+> **My journey into production MLOps** - This was my first attempt at building a complete, production-ready MLOps platform. I learned SO much building this - from FastAPI async patterns to Kubernetes troubleshooting!
+
 A **production-grade, end-to-end MLOps pipeline** for financial risk scoring and fraud detection — built with MLflow, FastAPI, Kubernetes, ArgoCD, and Evidently AI. Deployed on Azure Kubernetes Service (AKS) with automated retraining, drift monitoring, and GitOps delivery.
 
 This platform operationalizes a credit risk / fraud detection model through the full MLOps lifecycle: data ingestion, experiment tracking, model registry, containerized serving, CI/CD with quality gates, GitOps deployment, and automated drift-triggered retraining.
 
+**Why I built this:** I wanted to understand what "production ML" really means beyond just training models. Turns out it's 90% engineering and 10% ML!
+
 ---
 
-## �️ System Architecture
+## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -389,6 +393,34 @@ risk_platform_errors_total               # Error count by type
 ## 📄 License
 
 MIT License — see LICENSE file for details.
+
+---
+
+## 📝 Personal Learning Journey
+
+### My Learning Journey Building This
+
+**What I learned the hard way:**
+- **FastAPI async patterns**: Spent way too much time debugging async context managers!
+- **MLflow registry stages**: The API changes between versions are... painful
+- **Kubernetes networking**: Why won't my pods talk to each other?! (spoiler: service mesh issues)
+- **Pydantic v2 migration**: Validators are now field_validators - who knew?
+
+**Proud moments:**
+- Getting the first successful model promotion to Production stage
+- Watching drift detection actually trigger a retraining pipeline
+- When the Grafana dashboard finally showed real metrics
+
+**Things I'd do differently next time:**
+- Start with feature engineering earlier (spent weeks fixing data issues)
+- Use a simpler monitoring setup initially (Prometheus is complex!)
+- Better error handling in the FastAPI app (learned this the hard way)
+
+**Resources that saved me:**
+- MLflow documentation (actually pretty good!)
+- FastAPI's excellent error messages
+- The Kubernetes community on Slack
+- Countless Stack Overflow answers at 2 AM
 
 ---
 
