@@ -92,7 +92,7 @@ jobs:
         MLFLOW_EXPERIMENT_NAME: ${{ github.event.inputs.experiment_name || 'credit-risk-prod' }}
         
     - name: Upload training artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: training-artifacts
         path: |
@@ -161,7 +161,7 @@ jobs:
       continue-on-error: true
         
     - name: Upload evaluation report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: evaluation-report
         path: training/evaluation_report.json
