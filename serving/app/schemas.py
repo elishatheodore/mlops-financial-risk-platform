@@ -2,7 +2,7 @@
 Pydantic schemas for credit card fraud detection API.
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -61,7 +61,8 @@ class PredictionRequest(BaseModel):
     V28: float = Field(..., description="PCA component V28")
     Amount: float = Field(..., gt=0, description="Transaction amount in USD")
     
-    @validator('amount')
+    @field_validator('Amount')
+    @classmethod
     def validate_amount(cls, v):
         """Validate transaction amount."""
         if v <= 0:
@@ -70,22 +71,7 @@ class PredictionRequest(BaseModel):
             raise ValueError('Amount exceeds reasonable limit')
         return v
     
-    @validator('transaction_count_24h')
-    def validate_transaction_count(cls, v):
-        """Validate transaction count."""
-        if v > 1000:  # Reasonable upper limit
-            raise ValueError('Transaction count exceeds reasonable limit')
-        return v
     
-    @validator('avg_amount_30d')
-    def validate_avg_amount(cls, v):
-        """Validate average amount."""
-        if v <= 0:
-            raise ValueError('Average amount must be greater than 0')
-        if v > 50000:  # Reasonable upper limit
-            raise ValueError('Average amount exceeds reasonable limit')
-        return v
-
 class PredictionResponse(BaseModel):
     """Response schema for fraud prediction."""
     
@@ -100,14 +86,16 @@ class PredictionResponse(BaseModel):
     processing_time_ms: float = Field(..., ge=0, description="Processing time in milliseconds")
     feature_importance: Optional[Dict[str, float]] = Field(None, description="Feature importance scores")
     
-    @validator('risk_score')
+    @field_validator('risk_score')
+    @classmethod
     def validate_risk_score(cls, v):
         """Validate risk score."""
         if not 0 <= v <= 1:
             raise ValueError('Risk score must be between 0 and 1')
         return v
     
-    @validator('confidence')
+    @field_validator('confidence')
+    @classmethod
     def validate_confidence(cls, v):
         """Validate confidence score."""
         if not 0 <= v <= 1:
@@ -120,7 +108,8 @@ class BatchPredictionRequest(BaseModel):
     transactions: List[PredictionRequest] = Field(..., min_items=1, max_items=100, 
                                                 description="List of transactions to score")
     
-    @validator('transactions')
+    @field_validator('transactions')
+    @classmethod
     def validate_transactions(cls, v):
         """Validate batch size."""
         if len(v) > 100:

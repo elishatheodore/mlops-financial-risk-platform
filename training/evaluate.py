@@ -7,6 +7,7 @@ import json
 import sys
 import logging
 from pathlib import Path
+import numpy as np
 import pandas as pd
 import mlflow
 import mlflow.sklearn
@@ -334,6 +335,9 @@ def main():
     """Main evaluation function."""
     # Parse arguments
     args = parse_arguments()
+    
+    # Set MLflow tracking URI
+    mlflow.set_tracking_uri('http://localhost:5000')
     
     logger.info("🚀 Starting Credit Card Fraud Model Evaluation")
     logger.info(f"📝 Experiment: {args.experiment_name}")

@@ -49,15 +49,18 @@ class ModelLoader:
         try:
             # Get the latest Production model version
             model_versions = self.client.search_model_versions(
-                filter_string=f"name='{self.model_name}' and stage='Production'"
+                filter_string=f"name='{self.model_name}'"
             )
             
-            if not model_versions:
+            # Filter for Production stage models
+            production_models = [m for m in model_versions if m.current_stage == 'Production']
+            
+            if not production_models:
                 logger.error(f" No Production model found for '{self.model_name}'")
                 return False
             
             # Get the latest Production version
-            latest_version = max(model_versions, key=lambda x: int(x.version))
+            latest_version = max(production_models, key=lambda x: int(x.version))
             model_version = latest_version.version
             run_id = latest_version.run_id
             
